@@ -3,43 +3,66 @@ import ipdb
 import soundfile as sf
 import olafilt
 import numpy as np
-import ipdb
+import os
+from glob import glob
 
-## To generate random rirs and convolve with signals
-ipdb.set_trace()
-rir_if = roomsimove_single.RandomRIR(sampling_rate=16000)
-src = [np.random.rand(10000), np.random.rand(10000)]
-rev_sig = rir_if.reverberate(src, mic_cnt=2)
-
-
-
-rt60 = 0.4 # in seconds
-room_dim = [4.2, 3.4, 5.2] # in meters
-mic_pos1 = [2, 2, 2] # in  meters
-mic_pos2 = [2, 2, 1] # in  meters
-source_pos = [1, 1, 1] # in  meters
-sampling_rate = 16000
-
+rt60 =0.001
+# rt60 = 0.15 # in seconds
+room_dim = [3.6, 5.925, 2.80] # in meters
+mic_pos1 = [1.8, 2.92, 1.4] # in  meters
+mic_pos2 = [1.8, 3.08, 1.4] # in  meters
+sampling_rate = 48000
+seg_len = 400
 mic_positions = [mic_pos1, mic_pos2]
-rir = roomsimove_single.do_everything(room_dim, mic_positions, source_pos, rt60)
 
-## Alternative method for more control
-# absorption = roomsimove_single.rt60_to_absorption(room_dim, rt60)
-# room = roomsimove_single.Room(room_dim, abs_coeff=absorption)
-# mic1 = roomsimove_single.Microphone(mic_pos1, 1,  \
-#         orientation=[0.0, 0.0, 0.0], direction='omnidirectional')
-# mic2 = roomsimove_single.Microphone(mic_pos2, 2,  \
-#         orientation=[0.0, 0.0, 0.0], direction='cardioid')
-# mics = [mic1, mic2]
-# sim_rir = roomsimove_single.RoomSim(sampling_rate, room, mics, RT60=rt60)
-# rir = sim_rir.create_rir(source_pos)
-ipdb.set_trace()
+lookup = {}
 
-[data, fs] = sf.read('data.wav',always_2d=True)
-data =  data[:,0]
-data_rev_ch1 = olafilt.olafilt(rir[:,0], data)
-data_rev_ch2 = olafilt.olafilt(rir[:,1], data)
-data_rev = np.array([data_rev_ch1, data_rev_ch2])
-sf.write('data_rev.wav', data_rev.T, fs)
+files = glob("/Users/liuhaohe/Downloads/fordsp/testset/*/*48k.wav")
+
+def find(x, y):
+    x_round = round(x, 2)
+    y_round = round(y, 2)
+    key = "%.2f_%.2f" % (x_round, y_round)
+    if(not key in lookup.keys()):
+        source_pos = [1.8+x, 3.0+y, 1.4] # in meters
+        rir = roomsimove_single.do_everything(room_dim, mic_positions, source_pos, rt60)
+        lookup[key] = rir
+    return lookup[key]     
+   
+def get_pos(pos, index):
+    position = pos[index,:]
+    return position[0], position[1]
+
+def apply_filter(x, y, data):
+    rir = find(x, y)
+    data[:,0] = olafilt.olafilt(rir[:,0], data[:,0])
+    data[:,1] = olafilt.olafilt(rir[:,1], data[:,1])
+    return data
+
+def proc(file):
+    target_file = file.replace("48k.wav","48k_rev.wav")
+    dir = os.path.dirname(file)
+    [data, fs] = sf.read(file,always_2d=True)
+    binarual_pos = np.load(os.path.join(dir, "binaural_pos.npy"))
+    length = binarual_pos.shape[0]
+    i = 0
+    while(i < length):
+        print(i)
+        x,y = get_pos(binarual_pos, i)
+        data[i:i+seg_len] = apply_filter(x, y, data[i:i+seg_len])
+        i += seg_len
+    maxval = np.max(np.abs(data))
+    data = (data/maxval) * 0.99
+    sf.write(target_file, data, sampling_rate)
+    
+for file in files:
+    proc(file)
+
+
+
+
+
+
+
 
 

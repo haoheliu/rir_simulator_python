@@ -149,9 +149,9 @@ def do_everything(room_dim, mic_positions, source_pos, rt60):
     mics = []
     for idx, mic in enumerate(mic_positions):
         temp_mic = Microphone(mic, idx,  \
-            orientation=[0.0, 0.0, 0.0], direction='omnidirectional')
+            orientation=[0.0, 0.0, 0.0], direction='cardioid')
         mics.append(temp_mic)
-    sim_rir = RoomSim(16000, room, mics, RT60=rt60)
+    sim_rir = RoomSim(44100, room, mics, RT60=rt60)
     rir = sim_rir.create_rir(source_pos)
     return rir
 
@@ -482,7 +482,8 @@ class RoomSim(object):
         n_images=-1; #number of significant images of each parent source
         # Frequency dependent surface reflection and coordinates and distance for each image
         B = np.sqrt(1-self.A);
-        bx1, bx2, by1, by2, bz1, bz2 = B
+        # import ipdb; ipdb.set_trace()
+        bx1, bx2, by1, by2, bz1, bz2 = B.T
 
         for n in np.arange(-order_x, order_x+1, 1):
             bx2_abs_n = bx2**np.abs(n) # Compute here for efficiency
